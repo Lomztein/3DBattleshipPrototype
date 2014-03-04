@@ -3,15 +3,21 @@ using System.Collections;
 
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
-[ExecuteInEditMode]
 
 public class BattlefieldManager : MonoBehaviour {
 
+	public int activePlayer;
+	public int otherPlayer;
+	public bool[] battlefieldGenerated;
+	public bool showShipBlocks;
+	public bool showEksplosionBlocks;
+	public bool showSplashBlocks;
+
 	public Vector3 size;
 	public Vector3 center;
-	public int[,,] coordinates;
-	public Vector3[] blocksPos;
-	public GameObject[] blocks;
+	public int[,,,] coordinates;
+	public Vector3[,] blocksPos;
+	public GameObject[,] blocks;
 
 	public GameObject mousePointer;
 	public GameObject focusPointer;
@@ -30,6 +36,13 @@ public class BattlefieldManager : MonoBehaviour {
 	BoxCollider bcol;
 	Vector3 hitNormal;
 
+	//Players
+	//0 = None
+	//1 = 1
+	//2 = 2
+	//Duh!..
+
+	//Blocks
 	//0 = Nothing
 	//1 = Ship part
 	//2 = Destroyed ship part
@@ -37,11 +50,35 @@ public class BattlefieldManager : MonoBehaviour {
 
 	// Use this for initialization
 	void Start () {
-		GenerateBattlefield ();
+		activePlayer = 1;
+		battlefieldGenerated = new bool[2];
+		coordinates = new int[3,(int)size.x,(int)size.y,(int)size.z];
+		blocksPos = new Vector3[3,Mathf.RoundToInt (size.x*size.y*size.z)];
+		blocks = new GameObject[3,blocksPos.Length];
+		battlefieldGenerated[activePlayer-1] = true;
 		bcol = GetComponent<BoxCollider>();
+		GenerateBattlefield (activePlayer);
+	}
+
+	void ChangePlayer () {
+		if (activePlayer == 1) {
+			activePlayer = 2;
+		}else{
+			activePlayer = 1;
+		}
+		if (battlefieldGenerated[activePlayer-1] == false) {
+			GenerateBattlefield (activePlayer);
+		}
+		UpdateBattlefield (activePlayer);
+		Debug.Log ("Changed player!");
 	}
 
 	void Update () {
+		if (activePlayer == 1) {
+			otherPlayer = 2;
+		}else{
+			otherPlayer = 1;
+		}
 		if (buildNew == true) {
 			Start ();
 			buildNew = false;
@@ -59,8 +96,13 @@ public class BattlefieldManager : MonoBehaviour {
 			mousePointer.transform.position = new Vector3 ((int)hit.point.x,(int)hit.point.y,(int)hit.point.z);
 			focusPoint = focusPointer.transform.position;
 			
-			if (Input.GetButton ("Fire1")) {
-				ChangeBlock (focusPoint,1);
+			if (Input.GetButtonDown ("Fire1")) {
+				if (GetBlock (activePlayer,focusPoint) < 3) {
+					ChangeBlock (activePlayer,focusPoint,GetBlock (activePlayer,focusPoint)+1);
+				}else{
+					ChangeBlock (activePlayer,focusPoint,0);
+				}
+				UpdateBattlefield (activePlayer);
 			}
 		}
 
@@ -93,79 +135,82 @@ public class BattlefieldManager : MonoBehaviour {
 				mouseDepth = (int)size.z-1;
 			}
 		}
-		if (GetBlock (focusPoint) > 1) {
+		if (GetBlock (activePlayer,focusPoint) > 1) {
 			focusPointer.renderer.material.color = Color.red;
 		}
-		if (GetBlock (focusPoint) == 0) {
+		if (GetBlock (activePlayer,focusPoint) == 1) {
 			focusPointer.renderer.material.color = Color.blue;
+		}
+		if (GetBlock (activePlayer,focusPoint) == 0) {
+			focusPointer.renderer.material.color = Color.green;
 		}
 
 		Camera.main.transform.LookAt (center-Vector3.one/2);
 		
 	}
 	
-	void GenerateBattlefield () {
-
-		coordinates = new int[(int)size.x,(int)size.y,(int)size.z];
-		blocksPos = new Vector3[Mathf.RoundToInt (size.x*size.y*size.z)];
-		//int blockAmount = coordinates.Length;
+	void GenerateBattlefield (int player) {
 
 		int blockIndex = 0;
 		for (int x=0;x<size.x;x++) {
 			for (int y=0;y<size.y;y++) {
 				for (int z=0;z<size.z;z++) {
-					coordinates[x,y,z] = Random.Range (0,4);
-					blocksPos[blockIndex] = new Vector3 ( x,y,z );
+					coordinates[player,x,y,z] = 0;
+					blocksPos[player,blockIndex] = new Vector3 ( x,y,z );
 					blockIndex++;
 				}
 			}
 		}
-		UpdateBattlefield ();
 	}
 
-	int GetBlock (Vector3 pos) {
-		return coordinates[(int)pos.x,(int)pos.y,(int)pos.z];
+	int GetBlock (int player, Vector3 pos) {
+		return coordinates[player, (int)pos.x,(int)pos.y,(int)pos.z];
 	}
 
-	void ChangeBlock (Vector3 pos, int newBlock) {
-		coordinates[(int)pos.x,(int)pos.y,(int)pos.z] = newBlock;
+	void ChangeBlock (int player, Vector3 pos, int newBlock) {
+		coordinates[player, (int)pos.x,(int)pos.y,(int)pos.z] = newBlock;
 	}
 
-	void UpdateBattlefield () {
+	void UpdateBattlefield (int player) {
+		Debug.Log (blocksPos.Length/3);
 		for (int i=0;i<blocksPos.Length;i++) {
-			if (GetBlock (blocksPos[i]) == 0) {
-				if (blocks[i]) {
-					DestroyImmediate (blocks[i]);
-					blocks[i] = null;
-				}
+			Debug.Log (player + ", " + i);
+			if (blocks[player,i]) {
+				Destroy (blocks[player,i]);
 			}
-			if (GetBlock (blocksPos[i]) == 1) {
-				GameObject newBlock = (GameObject)Instantiate(shipBlock,blocksPos[i],Quaternion.identity);
+			if (GetBlock (player,blocksPos[player,i]) == 1) {
+				GameObject newBlock = (GameObject)Instantiate(shipBlock,blocksPos[player,i],Quaternion.identity);
 				newBlock.transform.parent = transform;
-				blocks[i] = newBlock;
+				blocks[player,i] = newBlock;
 			}
-			if (GetBlock (blocksPos[i]) == 2) {
-				GameObject newBlock = (GameObject)Instantiate(eksplosionBlock,blocksPos[i],Quaternion.identity);
+			if (GetBlock (player,blocksPos[player,i]) == 2) {
+				GameObject newBlock = (GameObject)Instantiate(eksplosionBlock,blocksPos[player,i],Quaternion.identity);
 				newBlock.transform.parent = transform;
-				blocks[i] = newBlock;
+				blocks[player,i] = newBlock;
 			}
-			if (GetBlock (blocksPos[i]) == 3) {
-				GameObject newBlock = (GameObject)Instantiate(splashBlock,blocksPos[i],Quaternion.identity);
+			if (GetBlock (player,blocksPos[player,i]) == 3) {
+				GameObject newBlock = (GameObject)Instantiate(splashBlock,blocksPos[player,i],Quaternion.identity);
 				newBlock.transform.parent = transform;
-				blocks[i] = newBlock;
+				blocks[player,i] = newBlock;
 			}
 		}
 	}
-	void FireRandomly () {
+	void FireRandomly (int player) {
 		Vector3 randomPos = new Vector3 (Random.Range (0,(int)size.x),Random.Range (0,(int)size.y),Random.Range (0,(int)size.z));
-		if (GetBlock(randomPos) != 1) {
-			ChangeBlock(randomPos,3);
+		if (GetBlock(player,randomPos) != 1) {
+			ChangeBlock(player,randomPos,3);
 		}else{
-			ChangeBlock(randomPos,1);
+			ChangeBlock(player,randomPos,1);
 		}
 	}
 
 	void OnDrawGizmos () {
 		Gizmos.DrawWireCube (center-Vector3.one/2,size);
+	}
+
+	void OnGUI () {
+		if (GUI.Button (new Rect(10,10,200,30),"Change player!")) {
+			ChangePlayer();
+		}
 	}
 }
