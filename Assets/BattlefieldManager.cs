@@ -14,6 +14,8 @@ public class BattlefieldManager : MonoBehaviour {
 	public bool showShipBlocks;
 	public bool showEksplosionBlocks;
 	public bool showSplashBlocks;
+	public bool gameOver;
+	public int winnerPlayer;
 	int[] shipIndex;
 	
 	public Vector3 size;
@@ -21,10 +23,14 @@ public class BattlefieldManager : MonoBehaviour {
 	public int[,,,] coordinates;
 	public Vector3[,] blocksPos;
 	public GameObject[,] blocks;
+	public GameObject[,] shipBlocks;
+	public int[] shipsLeft;
 
 	public GameObject mousePointer;
 	public GameObject focusPointer;
 	public GameObject middlePointer;
+	public GameObject shipPlacementPointer;
+	public Transform battlefieldWireframe;
 	public Transform aim;
 	public int mouseDepth;
 	public Vector3 focusPoint;
@@ -53,17 +59,22 @@ public class BattlefieldManager : MonoBehaviour {
 
 	// Use this for initialization
 	void Start () {
+		center = size / 2;
 		activePlayer = 1;
 		shipIndex = new int[2];
 		battlefieldGenerated = new bool[2];
+		shipsLeft = new int[2];
 		coordinates = new int[3,(int)size.x,(int)size.y,(int)size.z];
 		blocksPos = new Vector3[3,Mathf.RoundToInt (size.x*size.y*size.z)];
 		blocks = new GameObject[3,blocksPos.Length];
+		shipBlocks = new GameObject[3,blocksPos.Length];
 		battlefieldGenerated[activePlayer-1] = true;
 		bcol = GetComponent<BoxCollider>();
 		GenerateBattlefield (activePlayer);
 		shipIndex[0] = shipAmount;
 		shipIndex[1] = shipAmount;
+
+		Camera.main.transform.position = center + new Vector3 (0,0,-size.z*2);
 	}
 
 	void ChangePlayer () {
@@ -77,19 +88,21 @@ public class BattlefieldManager : MonoBehaviour {
 		if (battlefieldGenerated[activePlayer-1] == false) {
 			GenerateBattlefield (activePlayer);
 		}
-		if (shipIndex[activePlayer-1] == -1 && shipIndex[otherPlayer-1] == -1) {
+		if (shipIndex[activePlayer-1] == 0 && shipIndex[otherPlayer-1] == 0) {
 			currentAction = "Firing";
-			showShipBlocks = false;
 		}
-		CleanBattlefield (activePlayer);
-		CleanBattlefield (otherPlayer);
-
-		UpdateBattlefield (activePlayer,1);
-		UpdateBattlefield (otherPlayer,0.5f);
-
-		UpdateShips (activePlayer,1);
+		UpdateEverything ();
 	}
 
+	void UpdateEverything () {
+		CleanBattlefield (activePlayer);
+		CleanBattlefield (otherPlayer);
+		
+		UpdateBattlefield (activePlayer,0.25f);
+		UpdateBattlefield (otherPlayer,1f);
+		
+		UpdateShips (activePlayer,0.25f);
+	}
 	void Update () {
 		if (buildNew == true) {
 			Start ();
@@ -98,28 +111,32 @@ public class BattlefieldManager : MonoBehaviour {
 		center = size / 2;
 		bcol.center = center-Vector3.one/2;
 		bcol.size = size;
+		battlefieldWireframe.position = center-Vector3.one/2;
+		battlefieldWireframe.localScale = size;
 
 		Ray ray = Camera.main.ScreenPointToRay ( Input.mousePosition );
 		RaycastHit hit;
 		if (collider.Raycast (ray,out hit, Mathf.Infinity)) {
 			hitNormal = hit.normal;
-			aim.LookAt ( mousePointer.transform.position + hitNormal );
-			mousePointer.transform.rotation = aim.rotation;
-			mousePointer.transform.position = new Vector3 ((int)hit.point.x,(int)hit.point.y,(int)hit.point.z);
-			focusPoint = focusPointer.transform.position;
+			if (!Input.GetButton ("Fire2")) {
+				aim.LookAt ( mousePointer.transform.position + hitNormal );
+				mousePointer.transform.rotation = aim.rotation;
+				mousePointer.transform.position = new Vector3 ((int)hit.point.x,(int)hit.point.y,(int)hit.point.z);
+				focusPoint = focusPointer.transform.position;
+			}
 			
 			if (Input.GetButtonDown ("Fire1")) {
-				if (currentAction == "Placing") {
-					PlaceShip (activePlayer, focusPoint, shipIndex[activePlayer-1]+1, hitNormal);
-					shipIndex[activePlayer-1]--;
-					if (shipIndex[activePlayer-1] == -1) {
-						ChangePlayer ();
-					}
-				}
 				if (currentAction == "Firing") {
 					FireAtPlayer(otherPlayer,focusPoint);
 				}
-				UpdateBattlefield (otherPlayer,1f);
+				if (currentAction == "Placing") {
+					if (PlaceShip (activePlayer, focusPoint, shipIndex[activePlayer-1]+1, hitNormal)) {
+						shipIndex[activePlayer-1]--;
+						if (shipIndex[activePlayer-1] == 0) {
+							ChangePlayer ();
+						}
+					}
+				}
 			}
 		}
 
@@ -136,15 +153,12 @@ public class BattlefieldManager : MonoBehaviour {
 			newMouseDepth = TestPointerDepth(newMouseDepth);
 			mouseDepth = newMouseDepth;
 		}
-		/*if (GetBlock (activePlayer,focusPoint) > 1 && IsInsideBattlefield(focusPoint)) {
-			focusPointer.renderer.material.color = Color.red;
+		if (currentAction == "Placing") {
+			shipPlacementPointer.transform.localPosition = new Vector3 (-(float)shipIndex[activePlayer-1]+2,0,0);
+			shipPlacementPointer.transform.localScale = new Vector3 (1,1,(float)shipIndex[activePlayer-1]+1);
+		}else{
+			shipPlacementPointer.transform.localScale = new Vector3 (0,0,0);
 		}
-		if (GetBlock (activePlayer,focusPoint) == 1 && IsInsideBattlefield(focusPoint)) {
-			focusPointer.renderer.material.color = Color.blue;
-		}
-		if (GetBlock (activePlayer,focusPoint) == 0 && IsInsideBattlefield(focusPoint)) {
-			focusPointer.renderer.material.color = Color.green;
-		}*/
 
 		Camera.main.transform.LookAt (center-Vector3.one/2);
 		
@@ -203,13 +217,17 @@ public class BattlefieldManager : MonoBehaviour {
 	}
 
 	void CleanBattlefield (int player) {
-		for (int i=0;i<blocksPos.Length/3;i++) {
-			if (blocks[player,i]) {
-				Destroy (blocks[player,i]);
-			}
-			if (blocks[otherPlayer,i]) {
-				Destroy (blocks[otherPlayer,i]);
-			}
+		GameObject[] sh = GameObject.FindGameObjectsWithTag("ShipBlock");
+		GameObject[] ex = GameObject.FindGameObjectsWithTag("EksplosionBlock");
+		GameObject[] sp = GameObject.FindGameObjectsWithTag("SplashBlock");
+		for (int i=0;i<sh.Length;i++) {
+			Destroy(sh[i]);
+		}
+		for (int i=0;i<ex.Length;i++) {
+			Destroy(ex[i]);
+		}
+		for (int i=0;i<sp.Length;i++) {
+			Destroy(sp[i]);
 		}
 	}
 
@@ -228,18 +246,23 @@ public class BattlefieldManager : MonoBehaviour {
 				blocks[player,i] = newBlock;
 			}
 		}
+		Debug.Log ("Updated battlefield data from player " + player);
 		//int shipsLeft = TestShipBlocks (player);
 	}
 
 	void UpdateShips (int player, float alpha) {
+		int n = 0;
 		for (int i=0;i<blocksPos.Length/3;i++) {
 			if (GetBlock (player,blocksPos[player,i]) == 1 && showShipBlocks) {
 				GameObject newBlock = (GameObject)Instantiate(shipBlock,blocksPos[player,i],Quaternion.identity);
 				newBlock.renderer.material.color = new Color (1,1,1,alpha);
 				newBlock.transform.parent = transform;
-				blocks[player,i] = newBlock;
+				shipBlocks[player,i] = newBlock;
+				n++;
 			}
 		}
+		shipsLeft[player-1] = n;
+		Debug.Log ("Updated battleship data from player " + player);
 	}
 
 	void FireRandomly (int player) {
@@ -281,14 +304,15 @@ public class BattlefieldManager : MonoBehaviour {
 			ChangeBlock (player,pos,3);
 			ChangePlayer ();
 		}
+		UpdateEverything ();
 	}
 
-	void PlaceShip (int player, Vector3 pos, int length, Vector3 direction) {
+	bool PlaceShip (int player, Vector3 pos, int length, Vector3 direction) {
 		Debug.DrawRay (pos,direction*length,Color.white,5);
 		bool canPlace = true;
 		for (int i=0;i<length;i++) {
 			Vector3 newPos = pos + direction * i;
-			if (IsInsideBattlefield(newPos) == false || TestForNearbyShip(newPos) == false) {
+			if (IsInsideBattlefield(newPos) == false || GetBlock (player,pos) == 1) {
 				canPlace = false;
 			}
 		}
@@ -299,7 +323,9 @@ public class BattlefieldManager : MonoBehaviour {
 			}
 		}
 
+		Debug.Log (canPlace);
 		UpdateShips (player,1);
+		return canPlace;
 	}
 
 	bool TestForNearbyShip (Vector3 pos) {
@@ -319,5 +345,7 @@ public class BattlefieldManager : MonoBehaviour {
 			ChangePlayer();
 		}
 		GUI.Label (new Rect(10,40,Screen.width,20),"Player: " + activePlayer.ToString() + ". Mode: " + currentAction.ToString());
+		GUI.Label (new Rect(10,60,Screen.width,20),"Player 1 ship blocks left: " + shipsLeft[0].ToString());
+		GUI.Label (new Rect(10,80,Screen.width,20),"Player 2 ship blocks left: " + shipsLeft[1].ToString());
 	}
 }
