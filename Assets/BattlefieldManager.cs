@@ -16,7 +16,11 @@ public class BattlefieldManager : MonoBehaviour {
 	public bool showSplashBlocks;
 	public bool gameOver;
 	public int winnerPlayer;
-	int[] shipIndex;
+	public string waitText;
+	public int[] shipIndex;
+	public Vector3[] randomDirs;
+	public int aiAmount;
+	NormalAI ai;
 	
 	public Vector3 size;
 	public Vector3 center;
@@ -59,6 +63,12 @@ public class BattlefieldManager : MonoBehaviour {
 
 	// Use this for initialization
 	void Start () {
+		/*ai = GetComponent<NormalAI>();
+		if (aiEnabled) {
+			ai.enabled = true;
+		}else{
+			ai.enabled = false;
+		}*/
 		center = size / 2;
 		activePlayer = 1;
 		shipIndex = new int[2];
@@ -77,7 +87,7 @@ public class BattlefieldManager : MonoBehaviour {
 		Camera.main.transform.position = center + new Vector3 (0,0,-size.z*2);
 	}
 
-	void ChangePlayer () {
+	public void ChangePlayer () {
 		if (activePlayer == 1) {
 			activePlayer = 2;
 			otherPlayer = 1;
@@ -90,11 +100,39 @@ public class BattlefieldManager : MonoBehaviour {
 		}
 		if (shipIndex[activePlayer-1] == 0 && shipIndex[otherPlayer-1] == 0) {
 			currentAction = "Firing";
+		}else{
+			currentAction = "Placing";
 		}
 		UpdateEverything ();
 	}
 
-	void UpdateEverything () {
+	public void WaitForPlayer (int player) {
+		CleanBattlefield (player);
+		CleanBattlefield (otherPlayer);
+		currentAction = "Waiting";
+	}
+
+	public void PlaceShipsRandomly (int player) {
+		while (shipIndex[player-1] > 0) {
+			Vector3 randomPos = new Vector3 (Random.Range (0,(int)size.x),Random.Range (0,(int)size.y),Random.Range (0,(int)size.z));
+			Vector3 randomDir = randomDirs[Random.Range (0,randomDirs.Length)];
+			//Debug.Log (randomPos + ", " + randomDir);
+			if (PlaceShip(player,randomPos - randomDir * shipIndex[player-1],shipIndex[player-1]+1,randomDir) == true) {
+				shipIndex[player-1]--;
+			}
+		}
+		if (shipIndex[player-1] == 0) {
+			WaitForPlayer (otherPlayer);
+		}
+	}
+
+	public void UpdateEverything () {
+		/*if (aiEnabled) {
+			TestShipBlocks (ai.aiPlayer-1);
+		}
+		if (activePlayer == ai.aiPlayer && aiEnabled == true) {
+			return;
+		}*/
 		CleanBattlefield (activePlayer);
 		CleanBattlefield (otherPlayer);
 		
@@ -103,6 +141,7 @@ public class BattlefieldManager : MonoBehaviour {
 		
 		UpdateShips (activePlayer,0.25f);
 	}
+
 	void Update () {
 		if (buildNew == true) {
 			Start ();
@@ -133,7 +172,7 @@ public class BattlefieldManager : MonoBehaviour {
 					if (PlaceShip (activePlayer, focusPoint, shipIndex[activePlayer-1]+1, hitNormal)) {
 						shipIndex[activePlayer-1]--;
 						if (shipIndex[activePlayer-1] == 0) {
-							ChangePlayer ();
+							WaitForPlayer (otherPlayer);
 						}
 					}
 				}
@@ -203,20 +242,20 @@ public class BattlefieldManager : MonoBehaviour {
 		battlefieldGenerated[player-1] = true;
 	}
 
-	int GetBlock (int player, Vector3 pos) {
+	public int GetBlock (int player, Vector3 pos) {
 		if (IsInsideBattlefield(pos)) {
 			return coordinates[player, Mathf.RoundToInt(pos.x),Mathf.RoundToInt(pos.y),Mathf.RoundToInt(pos.z)];
 		}
 		return 0;
 	}
 
-	void ChangeBlock (int player, Vector3 pos, int newBlock) {
+	public void ChangeBlock (int player, Vector3 pos, int newBlock) {
 		if (IsInsideBattlefield(pos)) {
 			coordinates[player, Mathf.RoundToInt(pos.x),Mathf.RoundToInt(pos.y),Mathf.RoundToInt(pos.z)] = newBlock;
 		}
 	}
 
-	void CleanBattlefield (int player) {
+	public void CleanBattlefield (int player) {
 		GameObject[] sh = GameObject.FindGameObjectsWithTag("ShipBlock");
 		GameObject[] ex = GameObject.FindGameObjectsWithTag("EksplosionBlock");
 		GameObject[] sp = GameObject.FindGameObjectsWithTag("SplashBlock");
@@ -231,7 +270,7 @@ public class BattlefieldManager : MonoBehaviour {
 		}
 	}
 
-	void UpdateBattlefield (int player, float alpha) {
+	public void UpdateBattlefield (int player, float alpha) {
 		for (int i=0;i<blocksPos.Length/3;i++) {
 			if (GetBlock (player,blocksPos[player,i]) == 2 && showEksplosionBlocks) {
 				GameObject newBlock = (GameObject)Instantiate(eksplosionBlock,blocksPos[player,i],Quaternion.identity);
@@ -246,11 +285,11 @@ public class BattlefieldManager : MonoBehaviour {
 				blocks[player,i] = newBlock;
 			}
 		}
-		Debug.Log ("Updated battlefield data from player " + player);
+		//Debug.Log ("Updated battlefield data from player " + player);
 		//int shipsLeft = TestShipBlocks (player);
 	}
 
-	void UpdateShips (int player, float alpha) {
+	public void UpdateShips (int player, float alpha) {
 		int n = 0;
 		for (int i=0;i<blocksPos.Length/3;i++) {
 			if (GetBlock (player,blocksPos[player,i]) == 1 && showShipBlocks) {
@@ -262,56 +301,57 @@ public class BattlefieldManager : MonoBehaviour {
 			}
 		}
 		shipsLeft[player-1] = n;
-		Debug.Log ("Updated battleship data from player " + player);
+		//Debug.Log ("Updated battleship data from player " + player);
 	}
 
-	void FireRandomly (int player) {
+	public Vector3 FireRandomly (int player) {
 		Vector3 randomPos = new Vector3 (Random.Range (0,(int)size.x),Random.Range (0,(int)size.y),Random.Range (0,(int)size.z));
-		if (GetBlock(player,randomPos) != 1) {
-			ChangeBlock(player,randomPos,3);
-		}else{
-			ChangeBlock(player,randomPos,1);
-		}
+		FireAtPlayer (player,randomPos);
+		return randomPos;
 	}
 
-	int TestShipBlocks (int player) {
+	public int TestShipBlocks (int player) {
 		int n = 0;
 		for (int i=0;i<blocksPos.Length/3;i++) {
 			if (GetBlock (player,blocksPos[player,i]) == 1) {
 				n++;
 			}
 		}
-		Debug.Log ("Player " + player + " has " + n + " ship blocks left!");
+		//Debug.Log ("Player " + player + " has " + n + " ship blocks left!");
 		return n;
 	}
 
-	bool IsInsideBattlefield (Vector3 pos) {
+	public bool IsInsideBattlefield (Vector3 pos) {
 		bool inside = true;
 		if (pos.x > size.x) { inside = false; }
-		if (pos.x < 0) { inside = false; }
+		if (pos.x < -0.1) { inside = false; }
 		if (pos.y > size.y) { inside = false; }
-		if (pos.y < 0) { inside = false; }
+		if (pos.y < -0.1) { inside = false; }
 		if (pos.z > size.z) { inside = false; }
-		if (pos.z < 0) { inside = false; }
+		if (pos.z < -0.1) { inside = false; }
+		//if (inside == false) { Debug.Log ("Tested pos: " + inside + ", " + pos); }
 		return inside;
 	}
 
-	void FireAtPlayer (int player, Vector3 pos) {
-		if (GetBlock (player,pos) == 1) {
+	public int FireAtPlayer (int player, Vector3 pos) {
+		int block = GetBlock (player,pos);
+		if (block == 1) {
 			ChangeBlock (player,pos,2);
+			UpdateEverything ();
 		}
-		if (GetBlock (player,pos) == 0) {
+		if (block == 0) {
 			ChangeBlock (player,pos,3);
-			ChangePlayer ();
+			WaitForPlayer (otherPlayer);
 		}
-		UpdateEverything ();
+		return block;
 	}
 
-	bool PlaceShip (int player, Vector3 pos, int length, Vector3 direction) {
+	public bool PlaceShip (int player, Vector3 pos, int length, Vector3 direction) {
 		Debug.DrawRay (pos,direction*length,Color.white,5);
 		bool canPlace = true;
 		for (int i=0;i<length;i++) {
 			Vector3 newPos = pos + direction * i;
+			//Debug.Log (newPos);
 			if (IsInsideBattlefield(newPos) == false || GetBlock (player,pos) == 1) {
 				canPlace = false;
 			}
@@ -323,7 +363,6 @@ public class BattlefieldManager : MonoBehaviour {
 			}
 		}
 
-		Debug.Log (canPlace);
 		UpdateShips (player,1);
 		return canPlace;
 	}
@@ -341,11 +380,19 @@ public class BattlefieldManager : MonoBehaviour {
 	}
 
 	void OnGUI () {
-		if (GUI.Button (new Rect(10,10,200,30),"Change player!")) {
-			ChangePlayer();
+		if (currentAction == "Waiting") {
+			if (GUI.Button (new Rect(Screen.width/2-100,30,200,30),"Change player!")) {
+				ChangePlayer();
+			}
 		}
-		GUI.Label (new Rect(10,40,Screen.width,20),"Player: " + activePlayer.ToString() + ". Mode: " + currentAction.ToString());
-		GUI.Label (new Rect(10,60,Screen.width,20),"Player 1 ship blocks left: " + shipsLeft[0].ToString());
-		GUI.Label (new Rect(10,80,Screen.width,20),"Player 2 ship blocks left: " + shipsLeft[1].ToString());
+		if (currentAction == "Placing") {
+			if (GUI.Button (new Rect(10,10,200,30),"Place ships randomly.")) {
+				PlaceShipsRandomly(activePlayer);
+			}
+		}
+		GUI.Label (new Rect(10,40,Screen.width,20),"Pointer position: " + focusPointer.transform.position);
+		GUI.Label (new Rect(10,60,Screen.width,20),"Player: " + activePlayer.ToString() + ". Mode: " + currentAction.ToString());
+		GUI.Label (new Rect(10,80,Screen.width,20),"Player 1 ship blocks left: " + shipsLeft[0].ToString());
+		GUI.Label (new Rect(10,100,Screen.width,20),"Player 2 ship blocks left: " + shipsLeft[1].ToString());
 	}
 }
