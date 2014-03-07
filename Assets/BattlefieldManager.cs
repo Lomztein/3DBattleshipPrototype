@@ -20,7 +20,8 @@ public class BattlefieldManager : MonoBehaviour {
 	public int[] shipIndex;
 	public Vector3[] randomDirs;
 	public int aiAmount;
-	NormalAI ai;
+	public NormalAI ai;
+	//public StatsCarrier stats;
 	
 	public Vector3 size;
 	public Vector3 center;
@@ -62,13 +63,28 @@ public class BattlefieldManager : MonoBehaviour {
 	//3 = Splash
 
 	// Use this for initialization
+	/*void GetStats () {
+		GameObject statsCarrier = GameObject.Find ("StatsCarrier");
+		if (statsCarrier) {
+			stats = statsCarrier.GetComponent<StatsCarrier>();
+			aiAmount = stats.aiAmount;
+			shipAmount = stats.shipAmount;
+			size = stats.size;
+		}
+	}*/
 	void Start () {
-		/*ai = GetComponent<NormalAI>();
-		if (aiEnabled) {
-			ai.enabled = true;
-		}else{
-			ai.enabled = false;
-		}*/
+		//GetStats ();
+		if (aiAmount == 1) {
+			ai = (NormalAI)gameObject.AddComponent ("NormalAI");
+			ai.aiPlayer = 2;
+		}
+		if (aiAmount == 2) {
+			NormalAI ai = (NormalAI)gameObject.AddComponent ("NormalAI");
+			ai.aiPlayer = 2;
+			ai = (NormalAI)gameObject.AddComponent ("NormalAI");
+			ai.aiPlayer = 1;
+		}
+
 		center = size / 2;
 		activePlayer = 1;
 		shipIndex = new int[2];
@@ -127,12 +143,12 @@ public class BattlefieldManager : MonoBehaviour {
 	}
 
 	public void UpdateEverything () {
-		/*if (aiEnabled) {
+		if (aiAmount == 1) {
 			TestShipBlocks (ai.aiPlayer-1);
+			if (activePlayer == ai.aiPlayer) {
+				return;
+			}
 		}
-		if (activePlayer == ai.aiPlayer && aiEnabled == true) {
-			return;
-		}*/
 		CleanBattlefield (activePlayer);
 		CleanBattlefield (otherPlayer);
 		
@@ -152,6 +168,10 @@ public class BattlefieldManager : MonoBehaviour {
 		bcol.size = size;
 		battlefieldWireframe.position = center-Vector3.one/2;
 		battlefieldWireframe.localScale = size;
+
+		if (Input.GetButtonDown("Quit")) {
+			Application.Quit();
+		}
 
 		Ray ray = Camera.main.ScreenPointToRay ( Input.mousePosition );
 		RaycastHit hit;
@@ -243,8 +263,9 @@ public class BattlefieldManager : MonoBehaviour {
 	}
 
 	public int GetBlock (int player, Vector3 pos) {
+		pos = new Vector3(Mathf.RoundToInt(pos.x),Mathf.RoundToInt(pos.y),Mathf.RoundToInt(pos.z));
 		if (IsInsideBattlefield(pos)) {
-			return coordinates[player, Mathf.RoundToInt(pos.x),Mathf.RoundToInt(pos.y),Mathf.RoundToInt(pos.z)];
+			return coordinates[player, (int)pos.x,(int)pos.y,(int)pos.z];
 		}
 		return 0;
 	}
