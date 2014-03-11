@@ -6,6 +6,7 @@ using System.Collections;
 
 public class BattlefieldManager : MonoBehaviour {
 
+	public bool debugMode;
 	public int activePlayer;
 	public int otherPlayer;
 	public string currentAction;
@@ -263,15 +264,16 @@ public class BattlefieldManager : MonoBehaviour {
 	}
 
 	public int GetBlock (int player, Vector3 pos) {
+		int newBlock = -1;
 		pos = new Vector3(Mathf.RoundToInt(pos.x),Mathf.RoundToInt(pos.y),Mathf.RoundToInt(pos.z));
 		if (IsInsideBattlefield(pos)) {
-			return coordinates[player, (int)pos.x,(int)pos.y,(int)pos.z];
+			newBlock = coordinates[player, Mathf.RoundToInt(pos.x),Mathf.RoundToInt(pos.y),Mathf.RoundToInt(pos.z)];
 		}
-		return 0;
+		return newBlock;
 	}
 
 	public void ChangeBlock (int player, Vector3 pos, int newBlock) {
-		if (IsInsideBattlefield(pos)) {
+		if (IsInsideBattlefield(pos) == true) {
 			coordinates[player, Mathf.RoundToInt(pos.x),Mathf.RoundToInt(pos.y),Mathf.RoundToInt(pos.z)] = newBlock;
 		}
 	}
@@ -343,14 +345,15 @@ public class BattlefieldManager : MonoBehaviour {
 	}
 
 	public bool IsInsideBattlefield (Vector3 pos) {
+		pos = new Vector3(Mathf.RoundToInt(pos.x),Mathf.RoundToInt(pos.y),Mathf.RoundToInt(pos.z));
 		bool inside = true;
-		if (pos.x > size.x) { inside = false; }
+		if (pos.x > size.x-1) { inside = false; }
 		if (pos.x < -0.1) { inside = false; }
-		if (pos.y > size.y) { inside = false; }
+		if (pos.y > size.y-1) { inside = false; }
 		if (pos.y < -0.1) { inside = false; }
-		if (pos.z > size.z) { inside = false; }
+		if (pos.z > size.z-1) { inside = false; }
 		if (pos.z < -0.1) { inside = false; }
-		//if (inside == false) { Debug.Log ("Tested pos: " + inside + ", " + pos); }
+		if (inside == false) { Debug.Log ("Tested pos: " + inside + ", " + pos); }
 		return inside;
 	}
 
@@ -401,7 +404,7 @@ public class BattlefieldManager : MonoBehaviour {
 	}
 
 	void OnGUI () {
-		if (currentAction == "Waiting") {
+		if (currentAction == "Waiting" && debugMode == true) {
 			if (GUI.Button (new Rect(Screen.width/2-100,30,200,30),"Change player!")) {
 				ChangePlayer();
 			}
