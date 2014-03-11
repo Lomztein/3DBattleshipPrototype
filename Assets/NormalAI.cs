@@ -33,8 +33,12 @@ public class NormalAI : MonoBehaviour {
 		if (f.currentAction == "Firing" && f.activePlayer == aiPlayer) {
 			Vector3 newPos = new Vector3(0,0,0);
 			if (isSearching) {
-				hitsInRow = 0;
-				newPos = GetRandomPos ();
+				if (hitsInRow == 0) {
+					newPos = GetRandomPos ();
+				}else{
+					lastHit = lastRandomHit;
+					newPos = lastHit;
+				}
 			}
 			if (hitsInRow == 1) {
 				expectedDir = randomDirs[Random.Range (0,randomDirs.Length)];
@@ -43,7 +47,7 @@ public class NormalAI : MonoBehaviour {
 			if (hitsInRow > 1) {
 				newPos = lastHit + expectedDir;
 			}
-			if (TestNearbyBlocks(aiPlayer,newPos)) {
+			if (TestNearbyBlocks(f.otherPlayer,newPos)) {
 				hitsInRow = 0;
 				isSearching = true;
 			}
@@ -65,6 +69,8 @@ public class NormalAI : MonoBehaviour {
 				if (isSearching == false) {
 					isSearching = true;
 				}
+			}else if (newBlock > 1) {
+				lastHit = newPos + expectedDir;
 			}else{
 				if (TestNearbyBlocks(aiPlayer,newPos)) {
 					if (lastHit != lastRandomHit) {

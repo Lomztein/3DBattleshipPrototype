@@ -404,7 +404,7 @@ public class BattlefieldManager : MonoBehaviour {
 	}
 
 	void OnGUI () {
-		if (currentAction == "Waiting" && debugMode == true) {
+		if (currentAction == "Waiting" || debugMode == true) {
 			if (GUI.Button (new Rect(Screen.width/2-100,30,200,30),"Change player!")) {
 				ChangePlayer();
 			}
